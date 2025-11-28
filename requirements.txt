@@ -1,6 +1,8 @@
 flask
 requests
-pytz
 pandas
+numpy
 python-dateutil
+pytz
+ta
 gunicorn
