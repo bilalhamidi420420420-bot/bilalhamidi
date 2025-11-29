@@ -1,18 +1,58 @@
 import requests
 import pandas as pd
 
-def fetch_klines(symbol='BTCUSDT', interval='15m', limit=500):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
+OKX_CANDLES_URL = "https://www.okx.com/api/v5/market/candles"
+
+TF_MAP = {
+    "1m": "1m",
+    "3m": "3m",
+    "5m": "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h": "1H",
+    "4h": "4H",
+    "1d": "1D"
+}
+
+def fetch_klines(symbol="BTCUSDT", interval="15m", limit=200):
+
+    # تبدیل سمبل بایننس به OKX
+    if "-" in symbol:
+        inst_id = symbol
+    else:
+        if symbol.endswith("USDT"):
+            inst_id = symbol[:-4] + "-USDT"
+        else:
+            inst_id = symbol[:-3] + "-" + symbol[-3:]
+
+    bar = TF_MAP.get(interval.lower(), interval)
+
+    params = {
+        "instId": inst_id,
+        "bar": bar,
+        "limit": str(limit)
+    }
+
+    r = requests.get(OKX_CANDLES_URL, params=params)
     data = r.json()
-    df = pd.DataFrame(data, columns=[
-        'open_time','open','high','low','close','volume','close_time',
-        'quote_asset_volume','trades','taker_base','taker_quote','ignore'
-    ])
-    df['open'] = df['open'].astype(float)
-    df['high'] = df['high'].astype(float)
-    df['low'] = df['low'].astype(float)
-    df['close'] = df['close'].astype(float)
-    df['volume'] = df['volume'].astype(float)
+
+    if data.get("code") != "0":
+        raise Exception(f"OKX Error: {data}")
+
+    rows = []
+    for item in data["data"]:
+        ts = int(item[0])
+        o = float(item[1])
+        h = float(item[2])
+        l = float(item[3])
+        c = float(item[4])
+        v = float(item[5])
+        rows.append([ts, o, h, l, c, v])
+
+    rows.reverse()
+
+    df = pd.DataFrame(rows, columns=["timestamp","open","high","low","close","volume"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df.set_index("timestamp", inplace=True)
+
     return df
